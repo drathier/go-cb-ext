@@ -17,6 +17,25 @@ func GetDatacenters() []string {
 	return []string{"ryd", "awsSwe", "awsNY"}
 }
 
+func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value interface{}, unique string) error {
+	if err := AssertNotExists(bucket, key+":"+unique); err == nil {
+		err = AppendToArray(bucket, key, value)
+		if err == nil {
+			bucket.Set(key+":"+unique, 0, "1")
+		}
+	}
+	return nil
+}
+
+func AssertNotExists(bucket *couchbase.Bucket, key string) error {
+	_, err := bucket.GetRaw(key)
+	if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
+		return nil
+	} else {
+		return errors.New("KEY_EXISTS")
+	}
+}
+
 func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) error {
 	var keyValue int
 	err := bucket.Get(key+"_"+GetCurrentDatacenter(), &keyValue)
@@ -108,6 +127,7 @@ func DeleteArrayObject(bucket *couchbase.Bucket, key string, value interface{}) 
 }
 
 func GetArray(bucket *couchbase.Bucket, key string, rv interface{}) error {
+	//fmt.Printf("GetArray(bucket *couchbase.Bucket, key %#v, rv %#v)+n", key, rv)
 	count := 0
 	for _, dc := range GetDatacenters() {
 		val := 0
@@ -117,6 +137,9 @@ func GetArray(bucket *couchbase.Bucket, key string, rv interface{}) error {
 			return err
 		}
 	}
+
+	//fmt.Println("got keys @", key)
+	//time.Sleep(3 * time.Second)
 
 	slice := reflect.ValueOf(rv).Elem()
 	slice.Set(reflect.MakeSlice(slice.Type(), 0, count))
@@ -128,6 +151,8 @@ func GetArray(bucket *couchbase.Bucket, key string, rv interface{}) error {
 			continue
 		}
 
+		//fmt.Println("sleeping between datacenters")
+		//time.Sleep(3 * time.Second)
 		for i := 1; i <= keyValue; i += 1 {
 			v := reflect.New(slice.Type().Elem())
 			err = bucket.Get(key+"_"+dc+"_"+strconv.Itoa(i), v.Interface())
@@ -136,5 +161,6 @@ func GetArray(bucket *couchbase.Bucket, key string, rv interface{}) error {
 			}
 		}
 	}
+	//fmt.Println("GetArray done")
 	return nil
 }
