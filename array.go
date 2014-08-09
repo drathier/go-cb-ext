@@ -27,6 +27,11 @@ func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value inter
 	return nil
 }
 
+func DeleteUniqueArrayKey(bucket *couchbase.Bucket, key string, unique string) error {
+	err := bucket.Delete(key + ":" + unique)
+	return err
+}
+
 func AssertNotExists(bucket *couchbase.Bucket, key string) error {
 	_, err := bucket.GetRaw(key)
 	if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
@@ -97,6 +102,15 @@ func FlushArray(bucket *couchbase.Bucket, key string, value interface{}) error {
 	}
 
 	return nil
+}
+
+func DeleteUniqueArrayObject(bucket *couchbase.Bucket, key string, value interface{}, unique string) error {
+	err := DeleteArrayObject(bucket, key, value)
+	err2 := DeleteUniqueArrayKey(bucket, key, unique)
+	if err != nil {
+		return err
+	}
+	return err2
 }
 
 func DeleteArrayObject(bucket *couchbase.Bucket, key string, value interface{}) error {
