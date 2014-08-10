@@ -3,6 +3,7 @@ package cbext
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/couchbaselabs/go-couchbase"
 	"reflect"
 	"strconv"
@@ -36,6 +37,7 @@ func AssertNotExists(bucket *couchbase.Bucket, key string) error {
 	if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
 		return nil
 	} else {
+		fmt.Println("AssertNotExists()", err.Error())
 		return errors.New("KEY_EXISTS")
 	}
 }
