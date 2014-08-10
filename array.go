@@ -28,7 +28,10 @@ func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value inter
 			err = bucket.Set(key+":"+unique, 0, arraykey)
 		}
 	}
-	return arraykey, err
+	if !strings.Contains(err.Error(), "KEY_EXISTS") {
+		return arraykey, err
+	}
+	return arraykey, nil
 }
 
 func AssertNotExists(bucket *couchbase.Bucket, key string) error {
