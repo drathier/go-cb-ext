@@ -3,7 +3,6 @@ package cbext
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/couchbaselabs/go-couchbase"
 	"reflect"
 	"strconv"
@@ -34,10 +33,9 @@ func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value inter
 
 func AssertNotExists(bucket *couchbase.Bucket, key string) error {
 	_, err := bucket.GetRaw(key)
-	if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
+	if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
 		return nil
 	} else {
-		fmt.Println("AssertNotExists()", err.Error())
 		return errors.New("KEY_EXISTS")
 	}
 }
