@@ -17,19 +17,16 @@ func GetDatacenters() []string {
 	return []string{"ryd", "awsSwe", "awsNY"}
 }
 
-func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value interface{}, unique string) error {
+// TODO: make the "unique"-check field contain keys to their values in the array, for faster access
+
+func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value interface{}, unique string) (string, error) {
 	if err := AssertNotExists(bucket, key+":"+unique); err == nil {
-		err = AppendToArray(bucket, key, value)
+		arraykey, err := AppendToArray(bucket, key, value)
 		if err == nil {
-			bucket.Set(key+":"+unique, 0, "1")
+			bucket.Set(key+":"+unique, 0, arraykey)
 		}
 	}
-	return nil
-}
-
-func DeleteUniqueArrayKey(bucket *couchbase.Bucket, key string, unique string) error {
-	err := bucket.Delete(key + ":" + unique)
-	return err
+	return arraykey, nil
 }
 
 func AssertNotExists(bucket *couchbase.Bucket, key string) error {
@@ -41,11 +38,11 @@ func AssertNotExists(bucket *couchbase.Bucket, key string) error {
 	}
 }
 
-func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) error {
+func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) (string, error) {
 	var keyValue int
 	err := bucket.Get(key+"_"+GetCurrentDatacenter(), &keyValue)
 	if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
-		return err
+		return nil, err
 	}
 
 	if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
@@ -57,15 +54,15 @@ func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) erro
 	err = bucket.Set(key+"_"+GetCurrentDatacenter()+"_"+strconv.Itoa(keyValue), 0, value)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = bucket.Set(key+"_"+GetCurrentDatacenter(), 0, keyValue)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return key + "_" + GetCurrentDatacenter() + "_" + strconv.Itoa(keyValue), nil
 }
 
 func FlushArray(bucket *couchbase.Bucket, key string, value interface{}) error {
@@ -104,13 +101,21 @@ func FlushArray(bucket *couchbase.Bucket, key string, value interface{}) error {
 	return nil
 }
 
-func DeleteUniqueArrayObject(bucket *couchbase.Bucket, key string, value interface{}, unique string) error {
-	err := DeleteArrayObject(bucket, key, value)
-	err2 := DeleteUniqueArrayKey(bucket, key, unique)
+func DeleteUniqueArrayObject(bucket *couchbase.Bucket, key string, unique string) error {
+	var arraykey string
+	err1 := bucket.Get(key+":"+unique, &arraykey)
 	if err != nil {
 		return err
 	}
-	return err2
+	err = bucket.Delete(arraykey)
+	if err != nil {
+		return err
+	}
+	err = bucket.Delete(key + ":" + unique)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func DeleteArrayObject(bucket *couchbase.Bucket, key string, value interface{}) error {
