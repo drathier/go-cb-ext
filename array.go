@@ -21,13 +21,14 @@ func GetDatacenters() []string {
 
 func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value interface{}, unique string) (string, error) {
 	var arraykey string
-	if err := AssertNotExists(bucket, key+":"+unique); err == nil {
+	var err error
+	if err = AssertNotExists(bucket, key+":"+unique); err == nil {
 		arraykey, err = AppendToArray(bucket, key, value)
 		if err == nil {
-			bucket.Set(key+":"+unique, 0, arraykey)
+			err = bucket.Set(key+":"+unique, 0, arraykey)
 		}
 	}
-	return arraykey, nil
+	return arraykey, err
 }
 
 func AssertNotExists(bucket *couchbase.Bucket, key string) error {
