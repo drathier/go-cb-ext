@@ -20,8 +20,9 @@ func GetDatacenters() []string {
 // TODO: make the "unique"-check field contain keys to their values in the array, for faster access
 
 func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value interface{}, unique string) (string, error) {
+	var arraykey string
 	if err := AssertNotExists(bucket, key+":"+unique); err == nil {
-		arraykey, err := AppendToArray(bucket, key, value)
+		arraykey, err = AppendToArray(bucket, key, value)
 		if err == nil {
 			bucket.Set(key+":"+unique, 0, arraykey)
 		}
@@ -42,7 +43,7 @@ func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) (str
 	var keyValue int
 	err := bucket.Get(key+"_"+GetCurrentDatacenter(), &keyValue)
 	if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
-		return nil, err
+		return "", err
 	}
 
 	if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
@@ -54,12 +55,12 @@ func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) (str
 	err = bucket.Set(key+"_"+GetCurrentDatacenter()+"_"+strconv.Itoa(keyValue), 0, value)
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	err = bucket.Set(key+"_"+GetCurrentDatacenter(), 0, keyValue)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return key + "_" + GetCurrentDatacenter() + "_" + strconv.Itoa(keyValue), nil
@@ -103,7 +104,7 @@ func FlushArray(bucket *couchbase.Bucket, key string, value interface{}) error {
 
 func DeleteUniqueArrayObject(bucket *couchbase.Bucket, key string, unique string) error {
 	var arraykey string
-	err1 := bucket.Get(key+":"+unique, &arraykey)
+	err := bucket.Get(key+":"+unique, &arraykey)
 	if err != nil {
 		return err
 	}
