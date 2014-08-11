@@ -9,15 +9,24 @@ import (
 	"strings"
 )
 
+// couchbase error strings
+const (
+	KEY_ENOENT = "KEY_ENOENT" // the key isn't set in the database
+)
+
+// error strings used as return values
+const (
+	OBJECT_NOT_FOUND_IN_ARRAY = "OBJECT_NOT_FOUND_IN_ARRAY"
+	KEY_EXISTS                = "KEY_EXISTS"
+)
+
 func GetCurrentDatacenter() string {
 	return "ryd"
 }
 
 func GetDatacenters() []string {
-	return []string{"ryd", "awsSwe", "awsNY"}
+	return []string{"ryd"}
 }
-
-// TODO: make the "unique"-check field contain keys to their values in the array, for faster access
 
 func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value interface{}, unique string) (string, error) {
 	var arraykey string
@@ -29,7 +38,7 @@ func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value inter
 		}
 	}
 
-	if err != nil && !strings.Contains(err.Error(), "KEY_EXISTS") {
+	if err != nil && !strings.Contains(err.Error(), KEY_EXISTS) {
 		return arraykey, err
 	}
 	return arraykey, nil
@@ -37,21 +46,21 @@ func SilentUniqueAppendToArray(bucket *couchbase.Bucket, key string, value inter
 
 func AssertNotExists(bucket *couchbase.Bucket, key string) error {
 	_, err := bucket.GetRaw(key)
-	if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
+	if err != nil && strings.Contains(err.Error(), KEY_ENOENT) {
 		return nil
 	} else {
-		return errors.New("KEY_EXISTS")
+		return errors.New(KEY_EXISTS)
 	}
 }
 
 func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) (string, error) {
 	var keyValue int
 	err := bucket.Get(key+"_"+GetCurrentDatacenter(), &keyValue)
-	if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
+	if err != nil && !strings.Contains(err.Error(), KEY_ENOENT) {
 		return "", err
 	}
 
-	if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
+	if err != nil && strings.Contains(err.Error(), KEY_ENOENT) {
 		bucket.Set(key+"_"+GetCurrentDatacenter(), 0, 0)
 		keyValue = 0
 	}
@@ -76,7 +85,7 @@ func FlushArray(bucket *couchbase.Bucket, key string, value interface{}) error {
 	for _, dc := range GetDatacenters() {
 		val := 0
 		err := bucket.Get(key+"_"+dc, &val)
-		if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
+		if err != nil && !strings.Contains(err.Error(), KEY_ENOENT) {
 			return err
 		}
 		count += val
@@ -85,13 +94,13 @@ func FlushArray(bucket *couchbase.Bucket, key string, value interface{}) error {
 	for _, dc := range GetDatacenters() {
 		var keyValue int
 		err := bucket.Get(key+"_"+dc, &keyValue)
-		if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
+		if err != nil && strings.Contains(err.Error(), KEY_ENOENT) {
 			continue
 		}
 
 		for i := 1; i <= keyValue; i += 1 {
 			err = bucket.Delete(key + "_" + dc + "_" + strconv.Itoa(i))
-			if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
+			if err != nil && !strings.Contains(err.Error(), KEY_ENOENT) {
 				return err
 			}
 		}
@@ -99,7 +108,7 @@ func FlushArray(bucket *couchbase.Bucket, key string, value interface{}) error {
 
 	for _, dc := range GetDatacenters() {
 		err := bucket.Delete(key + "_" + dc)
-		if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
+		if err != nil && !strings.Contains(err.Error(), KEY_ENOENT) {
 			return err
 		}
 	}
@@ -133,7 +142,7 @@ func DeleteArrayObject(bucket *couchbase.Bucket, key string, value interface{}) 
 	for _, dc := range GetDatacenters() {
 		var keyValue int
 		err = bucket.Get(key+"_"+dc, &keyValue)
-		if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
+		if err != nil && strings.Contains(err.Error(), KEY_ENOENT) {
 			continue
 		}
 
@@ -148,23 +157,19 @@ func DeleteArrayObject(bucket *couchbase.Bucket, key string, value interface{}) 
 		}
 	}
 
-	return errors.New("OBJECT_NOT_FOUND_IN_ARRAY")
+	return errors.New(OBJECT_NOT_FOUND_IN_ARRAY)
 }
 
 func GetArray(bucket *couchbase.Bucket, key string, rv interface{}) error {
-	//fmt.Printf("GetArray(bucket *couchbase.Bucket, key %#v, rv %#v)+n", key, rv)
 	count := 0
 	for _, dc := range GetDatacenters() {
 		val := 0
 		err := bucket.Get(key+"_"+dc, &val)
 		count += val
-		if err != nil && !strings.Contains(err.Error(), "KEY_ENOENT") {
+		if err != nil && !strings.Contains(err.Error(), KEY_ENOENT) {
 			return err
 		}
 	}
-
-	//fmt.Println("got keys @", key)
-	//time.Sleep(3 * time.Second)
 
 	slice := reflect.ValueOf(rv).Elem()
 	slice.Set(reflect.MakeSlice(slice.Type(), 0, count))
@@ -172,12 +177,9 @@ func GetArray(bucket *couchbase.Bucket, key string, rv interface{}) error {
 	for _, dc := range GetDatacenters() {
 		var keyValue int
 		err := bucket.Get(key+"_"+dc, &keyValue)
-		if err != nil && strings.Contains(err.Error(), "KEY_ENOENT") {
+		if err != nil && strings.Contains(err.Error(), KEY_ENOENT) {
 			continue
 		}
-
-		//fmt.Println("sleeping between datacenters")
-		//time.Sleep(3 * time.Second)
 		for i := 1; i <= keyValue; i += 1 {
 			v := reflect.New(slice.Type().Elem())
 			err = bucket.Get(key+"_"+dc+"_"+strconv.Itoa(i), v.Interface())
@@ -186,6 +188,5 @@ func GetArray(bucket *couchbase.Bucket, key string, rv interface{}) error {
 			}
 		}
 	}
-	//fmt.Println("GetArray done")
 	return nil
 }
