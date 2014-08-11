@@ -53,6 +53,19 @@ func AssertNotExists(bucket *couchbase.Bucket, key string) error {
 	}
 }
 
+func CountArray(bucket *couchbase.Bucket, key string) (int, error) {
+	count := 0
+	for _, dc := range GetDatacenters() {
+		val := 0
+		err := bucket.Get(key+"_"+dc, &val)
+		if err != nil && !strings.Contains(err.Error(), KEY_ENOENT) {
+			return 0, err
+		}
+		count += val
+	}
+	return count, nil
+}
+
 func AppendToArray(bucket *couchbase.Bucket, key string, value interface{}) (string, error) {
 	var keyValue int
 	err := bucket.Get(key+"_"+GetCurrentDatacenter(), &keyValue)
